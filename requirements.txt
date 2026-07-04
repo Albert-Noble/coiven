@@ -1,0 +1,5 @@
+reportlab
+python-docx
+python-pptx
+Pillow
+psycopg2-binary
