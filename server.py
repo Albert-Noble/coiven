@@ -1437,6 +1437,8 @@ class CoivEnHandler(BaseHTTPRequestHandler):
             if not user: self.send_json({"error": "Unauthorized"}, 401); return
             self.send_json({"id": user["id"], "name": user["name"], "email": user["email"], "plan": "Pro"})
 
+        elif path == "/ping":
+            self.send_json({"status": "ok", "time": time.time()})
 
         else:
             self.send_json({"error": "Not found"}, 404)
@@ -2090,11 +2092,29 @@ getcontext().prec = 28
             self.send_json({"error": "Not found"}, 404)
 
 
+def _keep_alive():
+    """Ping the backend every 10 minutes to prevent Render free tier from sleeping."""
+    import urllib.request
+    port = int(os.environ.get("PORT", 5050))
+    url  = os.environ.get("RENDER_EXTERNAL_URL", f"http://127.0.0.1:{port}")
+    url  = url.rstrip("/") + "/ping"
+    while True:
+        time.sleep(600)  # 10 minutes
+        try:
+            urllib.request.urlopen(url, timeout=10)
+            print(f"[CoivEn] keep-alive ping OK → {url}")
+        except Exception as e:
+            print(f"[CoivEn] keep-alive ping failed: {e}")
+
+
 def run(port=None):
     port = int(port or os.environ.get("PORT", 5050))
-    host = "0.0.0.0"  # must be 0.0.0.0 in deployment (Render/Railway route traffic to this)
+    host = "0.0.0.0"
     server = ThreadingHTTPServer((host, port), CoivEnHandler)
-    server.daemon_threads = True  # don't block process exit on stuck request threads
+    server.daemon_threads = True
+    # Start keep-alive thread so free-tier hosting doesn't sleep
+    t = threading.Thread(target=_keep_alive, daemon=True)
+    t.start()
     print(f"[CoivEn Backend] Running on http://{host}:{port} (threaded)")
     server.serve_forever()
 
